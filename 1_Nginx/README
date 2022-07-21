@@ -1,0 +1,174 @@
+Установка docker-compose
+Загрузка docker-compose:
+mkdir -p ~/.docker/cli-plugins/
+curl -SL https://github.com/docker/compose/releases/download/v2.3.3/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose
+
+Разрешения для исполняемой команды docker-compose:
+chmod +x ~/.docker/cli-plugins/docker-compose
+
+Чекаю установку:
+docker compose version
+Выполнение команды docker без sudo
+Добавляю имя пользователя в docker группу:
+sudo usermod -aG docker ${USER}
+
+Релогнуться, или вбить:
+su - ${USER}
+
+Ацептим пользователя:
+groups
+
+Если вход был под другой учеткой, можно добавить вручную:
+sudo usermod -aG docker username
+Настройка nginx + docker-compose.yml
+Создаю каталог для дальнейших действий:
+mkdir ~/compose-test1
+cd ~/compose-test1
+
+В этом каталоге создаю папку для среды Nginx:
+mkdir ~/compose-test1/www
+
+Перехожу туда, и создаю файл (в дальнейшем используя nano):
+cd ~/compose-test1/www
+nano index.html
+
+Наполнение:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script>
+        let browser = navigator.userAgent;
+	document.write("Hello, your device UserAgent: " + browser)
+    </script>
+</head>
+<body>
+</body>
+</html>
+
+После создаю доп подпапку для смарта etc:
+mkdir ~/compose-test1/www/liteversion
+
+Перехожу туда, и создаю файл:
+cd ~/compose-test1/www/liteversion
+nano index.html
+
+Наполняю:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script>
+        let browser = navigator.userAgent;
+        document.write("Hello, your device UserAgent: " + browser)
+    </script>
+</head>
+<body>
+</body>
+</html>
+
+Создаю папки блока server:
+mkdir ~/compose-test1/conf.d
+
+Перехожу туда, и создаю файл:
+cd ~/compose-test1/conf.d
+nano cfg.conf
+
+Наполняю определением UserAgent:
+server {
+        listen 80;
+        listen [::]:80;
+
+        if ($http_user_agent ~* "(iphone|android)") {
+        rewrite ^(.*)$ /liteversion/index.html break;
+        }
+        root /var/www/;
+        index index.html index.htm index.nginx-debian.html;
+
+        server_name localhost;
+
+        location / {
+                try_files $uri $uri/ =404;
+
+}
+}
+
+
+server
+{
+    allow all;
+}
+
+Создаю папку:
+mkdir ~/compose-test1/conf
+
+Перехожу туда, и создаю файл:
+cd ~/compose-test1/conf
+nano nginx.conf
+
+Наполняю:
+worker_processes  auto;
+
+error_log  /var/log/nginx/error.log notice;
+pid        /var/run/nginx.pid;
+
+
+events {
+    worker_connections  1024;
+}
+
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile        on;
+    #tcp_nopush     on;
+
+    keepalive_timeout  65;
+
+    #gzip  on;
+
+    include /etc/nginx/conf.d/*.conf;
+}
+
+В корне compose-test1 создаю docker-compose.yml:
+cd ~/compose-test1
+nano docker-compose.yml
+
+version: '3.7'
+
+services:
+  nginx:
+    image: nginx:1.21.6
+    container_name: webserver2
+    restart: on-failure
+    ports:
+      - "8000:80"
+    volumes:
+     - ./www:/var/www
+     - ./conf.d:/etc/nginx/conf.d
+     - ./conf/nginx.conf:/etc/nginx/nginx.conf
+Запуск docker-compose
+
+docker compose up -d
+
+Чекаю работу контейнера:
+docker compose ps
+Чекаю работу на различных устройствах:
+
+curl -A notebook http://localhost:8000
+
+curl -A android http://localhost:8000
