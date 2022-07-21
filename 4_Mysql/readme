@@ -1,0 +1,110 @@
+Создаю каталог:
+mkdir ~/mysql-test
+cd ~/mysql-test
+
+Создаю папки master, slave:
+mkdir ~/mysql-test/{master,slave}
+
+Иду в папку master и создаю файл конфигурации
+cd ~/mysql-test/master
+nano mysql_master.env
+
+Наполняю:
+# Note, by default mysql root does not have a password. You need to restart a server to bring MYSQL_ROOT_PASSWORD working. Use "docker-compose restart" command.
+MYSQL_ROOT_PASSWORD=111
+MYSQL_PORT=3306
+MYSQL_USER=mydb_user
+MYSQL_PASSWORD=mydb_pwd
+MYSQL_DATABASE=mydb
+MYSQL_LOWER_CASE_TABLE_NAMES=0
+
+Создаю папку master/conf и создаю файл:
+mkdir ~/mysql-test/master/conf
+cd ~/mysql-test/master/conf
+nano mysql.conf.cnf
+
+Наполняю:
+[mysqld]
+
+server-id = 1
+log_bin = /var/log/mysql/mysql-bin.log
+
+Создаю папку slave/conf и создаю файл:
+mkdir ~/mysql-test/slave/conf
+cd ~/mysql-test/slave/conf
+nano mysql.conf.cnf
+
+Наполняю:
+[mysqld]
+
+server-id=2
+relay-log = /var/log/mysql/mysql-relay-bin.log
+log_bin = /var/log/mysql/mysql-bin.log
+
+Создаю в корне compose-test2 docker-compose.yml:
+cd ~/mysql-test
+nano docker-compose.yml
+
+Наполняю:
+version: '3.7'
+services:
+#master
+  mysql_master:
+    image: mysql:5.7
+    environment:
+      MYSQL_DATABASE: 'db'
+      MYSQL_USER: 'master'
+      MYSQL_PASSWORD: 'master'
+      MYSQL_ROOT_PASSWORD: 'master'
+    container_name: "mysql_master"
+    restart: "on-failure"
+    ports:
+      - 4406:3306  
+    volumes:
+      - ./master/conf/mysql.conf.cnf:/etc/mysql/conf.d/mysql.conf.cnf
+      - ./master/data:/var/lib/mysql
+    networks:
+      - overlay
+#slave
+  mysql_slave:
+    image: mysql:5.7
+    environment:
+      MYSQL_DATABASE: 'db'
+      MYSQL_USER: 'slave'
+      MYSQL_PASSWORD: 'slave'
+      MYSQL_ROOT_PASSWORD: 'slave'
+    container_name: "mysql_slave"
+    restart: "on-failure"
+    ports:
+      - 5506:3306  
+    depends_on:
+      - mysql_master 
+    volumes:
+      - ./slave/conf/mysql.conf.cnf:/etc/mysql/conf.d/mysql.conf.cnf
+      - ./slave/data:/var/lib/mysql
+    networks:
+      - overlay
+
+networks:
+  overlay:
+  
+Запускаю контейнеры:
+docker-compose up -d
+  
+Чекаю работу контейнера:
+docker compose ps
+
+Подчиненый узел:
+docker-compose exec -it mysql_slave bash
+
+Вводим:
+sudo mysql -u root -p
+
+Сообщаю слэйву мастер хост:
+mysql> CHANGE MASTER TO MASTER_HOST='mysql_master', MASTER_USER='root', MASTER_PASSWORD='password'
+
+Использую этот хост как слэйв:
+mysql> start slave;
+
+Чекаю статус слэйва:
+show slave status\G;
